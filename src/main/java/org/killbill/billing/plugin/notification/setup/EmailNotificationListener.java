@@ -26,6 +26,7 @@ import com.samskivert.mustache.MustacheException;
 import org.apache.commons.mail.EmailException;
 import org.joda.time.DateTime;
 import org.joda.time.LocalDate;
+import org.killbill.billing.ObjectType;
 import org.killbill.billing.account.api.Account;
 import org.killbill.billing.account.api.AccountApiException;
 import org.killbill.billing.account.api.AccountEmail;
@@ -55,7 +56,10 @@ import org.killbill.billing.plugin.notification.generator.ResourceBundleFactory;
 import org.killbill.billing.plugin.notification.generator.TemplateRenderer;
 import org.killbill.billing.plugin.notification.templates.MustacheTemplateEngine;
 import org.killbill.billing.tenant.api.TenantApiException;
+import org.killbill.billing.util.api.TagDefinitionApiException;
 import org.killbill.billing.util.callcontext.TenantContext;
+import org.killbill.billing.util.tag.Tag;
+import org.killbill.billing.util.tag.TagDefinition;
 import org.killbill.killbill.osgi.libs.killbill.OSGIConfigPropertiesService;
 import org.killbill.killbill.osgi.libs.killbill.OSGIKillbillAPI;
 import org.killbill.killbill.osgi.libs.killbill.OSGIKillbillClock;
@@ -193,7 +197,7 @@ public class EmailNotificationListener implements OSGIKillbillEventHandler {
         final UUID subscriptionId = killbillEvent.getObjectId();
 
         final Subscription subscription = osgiKillbillAPI.getSubscriptionApi().getSubscriptionForEntitlementId(subscriptionId, context);
-        if (subscription != null) {
+        if (subscription != null && !muteEmailForObject(subscription.getBundleId(), ObjectType.BUNDLE, context)) {
             final EmailContent emailContent = subscription.getState() == Entitlement.EntitlementState.CANCELLED ?
                     templateRenderer.generateEmailForSubscriptionCancellationEffective(account, subscription, context) :
                     templateRenderer.generateEmailForSubscriptionCancellationRequested(account, subscription, context);
@@ -258,6 +262,28 @@ public class EmailNotificationListener implements OSGIKillbillEventHandler {
             }
         });
         emailSender.sendPlainTextEmail(ImmutableList.of(account.getEmail()), ImmutableList.copyOf(cc), emailContent.getSubject(), emailContent.getBody());
+    }
+
+    private boolean muteEmailForObject(final UUID objectId, final ObjectType objectType, final TenantContext context) {
+
+        boolean hasMuteTag = false;
+        try {
+            TagDefinition muteEmailTagDefinition = osgiKillbillAPI.getTagUserApi().getTagDefinitionForName("mute_email", context);
+            if (muteEmailTagDefinition == null) {
+                return false;
+            }
+
+            List<Tag> tags = osgiKillbillAPI.getTagUserApi().getTagsForObject(objectId, objectType, false, context);
+
+            for (Tag tag : tags) {
+                if (muteEmailTagDefinition.getId().equals(tag.getTagDefinitionId())) {
+                    hasMuteTag = true;
+                }
+            }
+        } catch (TagDefinitionApiException e) {
+            // No tag definition, so don't mute
+        }
+        return hasMuteTag;
     }
 
     private static final class EmailNotificationContext implements TenantContext {
