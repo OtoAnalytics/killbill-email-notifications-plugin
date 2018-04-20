@@ -59,6 +59,7 @@ import org.killbill.billing.plugin.notification.email.EmailSender;
 import org.killbill.billing.plugin.notification.generator.ResourceBundleFactory;
 import org.killbill.billing.plugin.notification.generator.TemplateRenderer;
 import org.killbill.billing.plugin.notification.templates.MustacheTemplateEngine;
+import org.killbill.billing.plugin.notification.womplyClient.SubscriptionClientImpl;
 import org.killbill.billing.tenant.api.TenantApiException;
 import org.killbill.billing.util.api.TagDefinitionApiException;
 import org.killbill.billing.util.callcontext.TenantContext;
@@ -75,6 +76,9 @@ import javax.annotation.Nullable;
 public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OSGIKillbillEventHandler {
 
     private static final String INVOICE_DRY_RUN_TIME_PROPERTY = "org.killbill.invoice.dryRunNotificationSchedule";
+    private static final String SUBSCRIPTION_SERVICE_ADDRESS = "org.killbill.billing.plugin.notification.email.subscription.address";
+    private static final int SUBSCRIPTION_SERVICE_READ_TIMEOUT = 10;
+    private static final int SUBSCRIPTION_SERVICE_CONNECT_TIMEOUT = 10;
 
     private static final NullDryRunArguments NULL_DRY_RUN_ARGUMENTS = new NullDryRunArguments();
 
@@ -84,6 +88,7 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
     private final OSGIConfigPropertiesService configProperties;
     private final EmailSender emailSender;
     private final OSGIKillbillClock clock;
+    private final SubscriptionClientImpl subscriptionClient;
 
 
     private final ImmutableList<ExtBusEventType> EVENTS_TO_CONSIDER = new ImmutableList.Builder()
@@ -102,6 +107,12 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
         this.clock = clock;
         this.emailSender = new EmailSender(configProperties, logService);
         this.templateRenderer = new TemplateRenderer(new MustacheTemplateEngine(), new ResourceBundleFactory(killbillAPI.getTenantUserApi(), logService), killbillAPI.getTenantUserApi(), logService);
+
+        String subscriptionAddress = configProperties.getString(SUBSCRIPTION_SERVICE_ADDRESS);
+        Preconditions.checkArgument(subscriptionAddress != null, String.format("Cannot find property %s", SUBSCRIPTION_SERVICE_ADDRESS));
+
+        this.subscriptionClient = new SubscriptionClientImpl(subscriptionAddress, SUBSCRIPTION_SERVICE_READ_TIMEOUT, SUBSCRIPTION_SERVICE_CONNECT_TIMEOUT);
+
     }
 
     @Override
@@ -194,10 +205,11 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
 
         final Subscription subscription = osgiKillbillAPI.getSubscriptionApi().getSubscriptionForEntitlementId(subscriptionId, context);
         if (subscription != null && !muteEmailForObject(subscription.getBundleId(), ObjectType.BUNDLE, context)) {
-            final EmailContent emailContent = subscription.getState() == Entitlement.EntitlementState.CANCELLED ?
-                    templateRenderer.generateEmailForSubscriptionCancellationEffective(account, subscription, context) :
-                    templateRenderer.generateEmailForSubscriptionCancellationRequested(account, subscription, context);
-            sendEmail(account, emailContent, context);
+            //final EmailContent emailContent = subscription.getState() == Entitlement.EntitlementState.CANCELLED ?
+             //       templateRenderer.generateEmailForSubscriptionCancellationEffective(account, subscription, context) :
+             //       templateRenderer.generateEmailForSubscriptionCancellationRequested(account, subscription, context);
+            subscriptionClient.sendEmailRequest("sub_canceled", null, account);
+            //sendEmail(account, emailContent, context);
         }
     }
 
@@ -231,7 +243,8 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
             emailContent = templateRenderer.generateEmailForPaymentRefund(account, lastTransaction, context);
         } else {
             if (lastTransaction.getTransactionType() == TransactionType.PURCHASE && lastTransaction.getTransactionStatus() == TransactionStatus.SUCCESS) {
-                emailContent = templateRenderer.generateEmailForSuccessfulPayment(account, invoice, context);
+                //emailContent = templateRenderer.generateEmailForSuccessfulPayment(account, invoice, context);
+                subscriptionClient.sendEmailRequest("purchase_success", invoice, account);
             } else if (lastTransaction.getTransactionType() == TransactionType.PURCHASE && lastTransaction.getTransactionStatus() == TransactionStatus.PAYMENT_FAILURE) {
                 emailContent = templateRenderer.generateEmailForFailedPayment(account, invoice, context);
             }
