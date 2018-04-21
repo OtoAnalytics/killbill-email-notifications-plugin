@@ -17,6 +17,11 @@
 
 package org.killbill.billing.plugin.notification.setup;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.guava.GuavaModule;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -32,7 +37,6 @@ import org.killbill.billing.account.api.AccountEmail;
 import org.killbill.billing.catalog.api.BillingActionPolicy;
 import org.killbill.billing.catalog.api.PlanPhasePriceOverride;
 import org.killbill.billing.catalog.api.PlanPhaseSpecifier;
-import org.killbill.billing.entitlement.api.Entitlement;
 import org.killbill.billing.entitlement.api.Subscription;
 import org.killbill.billing.entitlement.api.SubscriptionApiException;
 import org.killbill.billing.entitlement.api.SubscriptionEventType;
@@ -75,6 +79,9 @@ import javax.annotation.Nullable;
 public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OSGIKillbillEventHandler {
 
     private static final String INVOICE_DRY_RUN_TIME_PROPERTY = "org.killbill.invoice.dryRunNotificationSchedule";
+    private static final String SUBSCRIPTION_SERVICE_ADDRESS = "org.killbill.billing.plugin.notification.email.subscription.address";
+    private static final int SUBSCRIPTION_SERVICE_READ_TIMEOUT = 10;
+    private static final int SUBSCRIPTION_SERVICE_CONNECT_TIMEOUT = 10;
 
     private static final NullDryRunArguments NULL_DRY_RUN_ARGUMENTS = new NullDryRunArguments();
 
@@ -84,6 +91,19 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
     private final OSGIConfigPropertiesService configProperties;
     private final EmailSender emailSender;
     private final OSGIKillbillClock clock;
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    static {
+        // Turn on pretty printing
+        OBJECT_MAPPER.configure(SerializationFeature.INDENT_OUTPUT, true);
+        OBJECT_MAPPER.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+
+        // Register necessary modules.
+        OBJECT_MAPPER.registerModule(new Jdk8Module());
+        OBJECT_MAPPER.registerModule(new GuavaModule());
+        OBJECT_MAPPER.registerModule(new JavaTimeModule());
+    }
 
 
     private final ImmutableList<ExtBusEventType> EVENTS_TO_CONSIDER = new ImmutableList.Builder()
@@ -102,6 +122,10 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
         this.clock = clock;
         this.emailSender = new EmailSender(configProperties, logService);
         this.templateRenderer = new TemplateRenderer(new MustacheTemplateEngine(), new ResourceBundleFactory(killbillAPI.getTenantUserApi(), logService), killbillAPI.getTenantUserApi(), logService);
+
+        String subscriptionAddress = configProperties.getString(SUBSCRIPTION_SERVICE_ADDRESS);
+        Preconditions.checkArgument(subscriptionAddress != null, String.format("Cannot find property %s", SUBSCRIPTION_SERVICE_ADDRESS));
+
     }
 
     @Override
@@ -194,10 +218,12 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
 
         final Subscription subscription = osgiKillbillAPI.getSubscriptionApi().getSubscriptionForEntitlementId(subscriptionId, context);
         if (subscription != null && !muteEmailForObject(subscription.getBundleId(), ObjectType.BUNDLE, context)) {
-            final EmailContent emailContent = subscription.getState() == Entitlement.EntitlementState.CANCELLED ?
-                    templateRenderer.generateEmailForSubscriptionCancellationEffective(account, subscription, context) :
-                    templateRenderer.generateEmailForSubscriptionCancellationRequested(account, subscription, context);
-            sendEmail(account, emailContent, context);
+            //final EmailContent emailContent = subscription.getState() == Entitlement.EntitlementState.CANCELLED ?
+             //       templateRenderer.generateEmailForSubscriptionCancellationEffective(account, subscription, context) :
+             //       templateRenderer.generateEmailForSubscriptionCancellationRequested(account, subscription, context);
+            ////subscriptionClient.sendEmailRequest("sub_canceled", null, account);
+            System.out.println("CANCEL: " + OBJECT_MAPPER.writeValueAsString(account));
+            //sendEmail(account, emailContent, context);
         }
     }
 
@@ -231,7 +257,9 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
             emailContent = templateRenderer.generateEmailForPaymentRefund(account, lastTransaction, context);
         } else {
             if (lastTransaction.getTransactionType() == TransactionType.PURCHASE && lastTransaction.getTransactionStatus() == TransactionStatus.SUCCESS) {
-                emailContent = templateRenderer.generateEmailForSuccessfulPayment(account, invoice, context);
+                //emailContent = templateRenderer.generateEmailForSuccessfulPayment(account, invoice, context);
+                ////subscriptionClient.sendEmailRequest("purchase_success", invoice, account);
+                System.out.println("SUCCESS: " + OBJECT_MAPPER.writeValueAsString(account));
             } else if (lastTransaction.getTransactionType() == TransactionType.PURCHASE && lastTransaction.getTransactionStatus() == TransactionStatus.PAYMENT_FAILURE) {
                 emailContent = templateRenderer.generateEmailForFailedPayment(account, invoice, context);
             }
