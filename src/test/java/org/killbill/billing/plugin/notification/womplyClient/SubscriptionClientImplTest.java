@@ -8,7 +8,6 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMoc
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
-import org.eclipse.jetty.http.HttpStatus;
 import org.killbill.billing.account.api.Account;
 import org.killbill.billing.invoice.api.Invoice;
 import org.killbill.billing.plugin.notification.womplyClient.mockModels.MockAccount;
@@ -61,7 +60,7 @@ public class SubscriptionClientImplTest {
                 .willReturn(aResponse()
                         .withHeader("Content-Type", "application/json")
                         .withBody("")
-                        .withStatus(HttpStatus.NO_CONTENT_204)));
+                        .withStatus(204)));
 
         boolean response = client.sendEmailRequest("Payment", mockInvoice, mockAccount);
 
