@@ -126,6 +126,26 @@
             <artifactId>testng</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.github.tomakehurst</groupId>
+            <artifactId>wiremock</artifactId>
+            <version>1.57</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.sun.jersey</groupId>
+            <artifactId>jersey-client</artifactId>
+            <version>${jersey.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.w3c</groupId>
+            <artifactId>dom</artifactId>
+            <version>2.3.0-jaxb-1.0.6</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -159,9 +179,15 @@
                     <instructions>
                         <Bundle-Activator>org.killbill.billing.plugin.notification.setup.EmailNotificationActivator</Bundle-Activator>
                         <Export-Package />
-                        <Private-Package>org.killbill.billing.plugin.notification.*</Private-Package>
+                        <Private-Package>
+                            org.killbill.billing.plugin.notification.*;
+                            org.w3c.dom.*;
+                            com.github.tomakehurst.wiremock.*
+                        </Private-Package>
                         <!-- Optional resolution because exported by the Felix system bundle -->
                         <Import-Package>
+                            com.fasterxml.jackson.databind
+                            com.sun.jersey.client
                             javax.annotation;
                             javax.activation;
                             javax.naming.directory;
@@ -171,7 +197,6 @@
                             javax.naming;
                             javax.net;
                             javax.net.ssl;
-                            version="[0,3)",
                             *;resolution:=optional
                         </Import-Package>
                     </instructions>
