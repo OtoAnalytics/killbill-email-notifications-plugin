@@ -3,16 +3,16 @@ package org.killbill.billing.plugin.notification.womplyClient;
 public class EmailRequestModel {
 
     private String emailType;
-    private String invoiceNumber;
+    private String invoiceId;
     private String subscriptionId;
     private String businessLocationId;
 
     public EmailRequestModel(String emailType,
-                             String invoiceNumber,
+                             String invoiceId,
                              String subscriptionId,
                              String businessLocationId) {
         this.emailType = emailType;
-        this.invoiceNumber = invoiceNumber;
+        this.invoiceId = invoiceId;
         this.subscriptionId = subscriptionId;
         this.businessLocationId = businessLocationId;
     }
@@ -25,9 +25,9 @@ public class EmailRequestModel {
         this.emailType = emailType;
     }
 
-    public String getInvoiceNumber() { return invoiceNumber; }
+    public String getInvoiceId() { return invoiceId; }
 
-    public void setInvoiceNumber(String invoiceNumber) { this.invoiceNumber = invoiceNumber; }
+    public void setInvoiceId(String invoiceId) { this.invoiceId = invoiceId; }
 
     public String getSubscriptionId() {
         return subscriptionId;
