@@ -40,6 +40,8 @@ import org.killbill.billing.invoice.api.DryRunArguments;
 import org.killbill.billing.invoice.api.DryRunType;
 import org.killbill.billing.invoice.api.Invoice;
 import org.killbill.billing.invoice.api.InvoiceApiException;
+import org.killbill.billing.invoice.api.InvoiceItem;
+import org.killbill.billing.invoice.api.InvoiceItemType;
 import org.killbill.billing.invoice.api.InvoicePayment;
 import org.killbill.billing.notification.plugin.api.ExtBusEvent;
 import org.killbill.billing.notification.plugin.api.ExtBusEventType;
@@ -69,6 +71,7 @@ import org.osgi.service.log.LogService;
 import org.skife.config.TimeSpan;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import javax.annotation.Nullable;
@@ -221,10 +224,31 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
         Preconditions.checkArgument(killbillEvent.getEventType() == ExtBusEventType.INVOICE_PAYMENT_FAILED || killbillEvent.getEventType() == ExtBusEventType.INVOICE_PAYMENT_SUCCESS, String.format("Unexpected event %s", killbillEvent.getEventType()));
 
         final Invoice invoice = osgiKillbillAPI.getInvoiceUserApi().getInvoice(invoiceId, context);
+
+        boolean oneTimePayment = false;
+        boolean recurringPayment = false;
+        for (InvoiceItem current : invoice.getInvoiceItems()) {
+            try {
+                if (current != null && current.getInvoiceItemType() != null) {
+                        if (current.getInvoiceItemType() == InvoiceItemType.EXTERNAL_CHARGE) {
+                            oneTimePayment = true;
+                        }
+                        if (current.getInvoiceItemType() == InvoiceItemType.RECURRING) {
+                            recurringPayment = true;
+                        }
+                }
+            } catch (Exception e) {
+                logService.log(LogService.LOG_WARNING, String.format("Failed to evaluate invoice items for: %s", killbillEvent.getAccountId()), e);
+            }
+        }
+
         if (invoice.getNumberOfPayments() == 0) {
-            // Aborted payment? Maybe no default payment method...
+            if (invoice.getBalance().compareTo(BigDecimal.ZERO) == 0 && recurringPayment && !oneTimePayment) {
+                    subscriptionClient.sendEmailRequest("Purchase_Success", invoice, account);
+            }
             return;
         }
+
         final InvoicePayment invoicePayment = invoice.getPayments().get(invoice.getNumberOfPayments() - 1);
 
         final Payment payment = osgiKillbillAPI.getPaymentApi().getPayment(invoicePayment.getPaymentId(), false, false, ImmutableList.<PluginProperty>of(), context);
@@ -241,11 +265,17 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
             emailContent = templateRenderer.generateEmailForPaymentRefund(account, lastTransaction, context);
         } else {
             if (lastTransaction.getTransactionType() == TransactionType.PURCHASE && lastTransaction.getTransactionStatus() == TransactionStatus.SUCCESS) {
-                subscriptionClient.sendEmailRequest("Purchase_Success", invoice, account);
-                //emailContent = templateRenderer.generateEmailForSuccessfulPayment(account, invoice, context);
+                if (oneTimePayment) {
+                    emailContent = templateRenderer.generateEmailForSuccessfulPayment(account, invoice, context);
+                } else {
+                    subscriptionClient.sendEmailRequest("Purchase_Success", invoice, account);
+                }
             } else if (lastTransaction.getTransactionType() == TransactionType.PURCHASE && lastTransaction.getTransactionStatus() == TransactionStatus.PAYMENT_FAILURE) {
-                subscriptionClient.sendEmailRequest("Purchase_Failure", invoice, account);
-                //emailContent = templateRenderer.generateEmailForFailedPayment(account, invoice, context);
+                if (oneTimePayment) {
+                    emailContent = templateRenderer.generateEmailForFailedPayment(account, invoice, context);
+                } else {
+                    subscriptionClient.sendEmailRequest("Purchase_Failure", invoice, account);
+                }
             }
         }
         if (emailContent != null) {
