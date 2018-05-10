@@ -225,6 +225,8 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
 
         final Invoice invoice = osgiKillbillAPI.getInvoiceUserApi().getInvoice(invoiceId, context);
 
+        logService.log(LogService.LOG_INFO, String.format("Payment Email request for Invoice: %s", invoiceId));
+
         boolean oneTimePayment = false;
         boolean recurringPayment = false;
         for (InvoiceItem current : invoice.getInvoiceItems()) {
