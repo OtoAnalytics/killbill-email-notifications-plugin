@@ -60,7 +60,7 @@ public class SubscriptionClientImpl extends BaseServiceClient {
         logService.log(LogService.LOG_INFO,
                 String.format("Data for %s", subscriptionReceiptTarget.getURI().toString()));
         EmailRequestModel emailRequestModel = new EmailRequestModel(emailType, invoiceId, subscriptionId, mlid);
-        logService.log(LogService.LOG_INFO, String.format("Sending subscription service request for %s", emailType));
+        logService.log(LogService.LOG_INFO, String.format("Sending subscription service request of %s for %s", emailType, invoiceId));
 
         ClientResponse response;
         try {

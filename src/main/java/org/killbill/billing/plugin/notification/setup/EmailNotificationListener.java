@@ -243,8 +243,12 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
         }
 
         if (invoice.getNumberOfPayments() == 0) {
+            logService.log(LogService.LOG_INFO, String.format("Zero payment invoice found for invoice: %s", invoiceId.toString()));
             if (invoice.getBalance().compareTo(BigDecimal.ZERO) == 0 && recurringPayment && !oneTimePayment) {
                     subscriptionClient.sendEmailRequest("Purchase_Success", invoice, account);
+            } else {
+                logService.log(LogService.LOG_INFO, String.format("Invoice: %s failed check with BalComp: %i, recurring: %b, and oneTime: %b",
+                        invoiceId.toString(), invoice.getBalance().compareTo(BigDecimal.ZERO), recurringPayment, oneTimePayment));
             }
             return;
         }
