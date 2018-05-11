@@ -120,9 +120,6 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
     @Override
     public void handleKillbillEvent(final ExtBusEvent killbillEvent) {
 
-        logService.log(LogService.LOG_INFO, String.format("Received event %s for object type = %s, id = %s",
-                killbillEvent.getEventType(), killbillEvent.getObjectType(), killbillEvent.getObjectId()));
-
         if (!EVENTS_TO_CONSIDER.contains(killbillEvent.getEventType())) {
             return;
         }
@@ -145,6 +142,7 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
                     sendEmailForUpComingInvoice(account, killbillEvent, context);
                     break;
 
+                case INVOICE_CREATION:
                 case INVOICE_PAYMENT_SUCCESS:
                 case INVOICE_PAYMENT_FAILED:
                     sendEmailForPayment(account, killbillEvent, context);
@@ -158,8 +156,8 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
                     break;
             }
 
-//            logService.log(LogService.LOG_INFO, String.format("Received event %s for object type = %s, id = %s",
-//                    killbillEvent.getEventType(), killbillEvent.getObjectType(), killbillEvent.getObjectId()));
+            logService.log(LogService.LOG_INFO, String.format("Received event %s for object type = %s, id = %s",
+                    killbillEvent.getEventType(), killbillEvent.getObjectType(), killbillEvent.getObjectId()));
 
         } catch (final AccountApiException e) {
             logService.log(LogService.LOG_WARNING, String.format("Unable to find account: %s", killbillEvent.getAccountId()), e);
@@ -224,7 +222,8 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
             return;
         }
 
-        Preconditions.checkArgument(killbillEvent.getEventType() == ExtBusEventType.INVOICE_PAYMENT_FAILED || killbillEvent.getEventType() == ExtBusEventType.INVOICE_PAYMENT_SUCCESS, String.format("Unexpected event %s", killbillEvent.getEventType()));
+        Preconditions.checkArgument(killbillEvent.getEventType() == ExtBusEventType.INVOICE_PAYMENT_FAILED || killbillEvent.getEventType() == ExtBusEventType.INVOICE_PAYMENT_SUCCESS || killbillEvent.getEventType() == ExtBusEventType.INVOICE_CREATION,
+                String.format("Unexpected event %s", killbillEvent.getEventType()));
 
         final Invoice invoice = osgiKillbillAPI.getInvoiceUserApi().getInvoice(invoiceId, context);
 
@@ -247,14 +246,19 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
             }
         }
 
-        if (invoice.getNumberOfPayments() == 0) {
-            logService.log(LogService.LOG_INFO, String.format("Zero payment invoice found for invoice: %s", invoiceId.toString()));
-            if (invoice.getBalance().compareTo(BigDecimal.ZERO) == 0 && recurringPayment && !oneTimePayment) {
+        if (killbillEvent.getEventType() == ExtBusEventType.INVOICE_CREATION) {
+            // We only want to send requests for INVOICE_CREATION events that are not also generating INVOICE_PAYMENT events
+            // i.e. those with no payments, and a zero balance. All others are ignored as they were before.
+            // This work only effects invoices with ONLY recurring items.
+            if (invoice.getNumberOfPayments() == 0) {
+                if (invoice.getBalance().compareTo(BigDecimal.ZERO) == 0 && recurringPayment && !oneTimePayment) {
                     subscriptionClient.sendEmailRequest("Purchase_Success", invoice, account);
-            } else {
-                logService.log(LogService.LOG_INFO, String.format("Invoice: %s failed check with BalComp: %i, recurring: %b, and oneTime: %b",
-                        invoiceId.toString(), invoice.getBalance().compareTo(BigDecimal.ZERO), recurringPayment, oneTimePayment));
+                    logService.log(LogService.LOG_INFO, String.format("Generating request for invoice: %s", invoiceId.toString()));
+                    return;
+                }
             }
+            logService.log(LogService.LOG_INFO, String.format("Invoice: %s failed check with # of payments: %i, BalComp: %i, recurring: %b, and oneTime: %b",
+                invoiceId.toString(), invoice.getNumberOfPayments(), invoice.getBalance().compareTo(BigDecimal.ZERO), recurringPayment, oneTimePayment));
             return;
         }
 
