@@ -253,11 +253,11 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
             if (invoice.getNumberOfPayments() == 0) {
                 if (invoice.getBalance().compareTo(BigDecimal.ZERO) == 0 && recurringPayment && !oneTimePayment) {
                     subscriptionClient.sendEmailRequest("Purchase_Success", invoice, account);
-                    logService.log(LogService.LOG_INFO, String.format("Generating request for invoice: %s", invoiceId.toString()));
+                    logService.log(LogService.LOG_INFO, String.format("Generated 0 due receipt for invoice: %s", invoiceId.toString()));
                     return;
                 }
             }
-            logService.log(LogService.LOG_INFO, String.format("Invoice: %s failed check with # of payments: %i, BalComp: %i, recurring: %b, and oneTime: %b",
+            logService.log(LogService.LOG_INFO, String.format("Invoice: %s failed check with # of payments: %d, BalComp: %d, recurring: %b, and oneTime: %b",
                 invoiceId.toString(), invoice.getNumberOfPayments(), invoice.getBalance().compareTo(BigDecimal.ZERO), recurringPayment, oneTimePayment));
             return;
         }
@@ -282,17 +282,20 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
                     emailContent = templateRenderer.generateEmailForSuccessfulPayment(account, invoice, context);
                 } else {
                     subscriptionClient.sendEmailRequest("Purchase_Success", invoice, account);
+                    logService.log(LogService.LOG_INFO, String.format("Generated successful purchase receipt for invoice: %s", invoiceId.toString()));
                 }
             } else if (lastTransaction.getTransactionType() == TransactionType.PURCHASE && lastTransaction.getTransactionStatus() == TransactionStatus.PAYMENT_FAILURE) {
                 if (oneTimePayment) {
                     emailContent = templateRenderer.generateEmailForFailedPayment(account, invoice, context);
                 } else {
                     subscriptionClient.sendEmailRequest("Purchase_Failure", invoice, account);
+                    logService.log(LogService.LOG_INFO, String.format("Generated failed purchase receipt for invoice: %s", invoiceId.toString()));
                 }
             }
         }
         if (emailContent != null) {
             sendEmail(account, emailContent, context);
+            logService.log(LogService.LOG_INFO, String.format("Fell back to killbill email for Invoice: %s", invoiceId.toString()));
         }
     }
 
