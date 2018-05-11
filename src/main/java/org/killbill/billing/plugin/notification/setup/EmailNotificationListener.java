@@ -120,6 +120,9 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
     @Override
     public void handleKillbillEvent(final ExtBusEvent killbillEvent) {
 
+        logService.log(LogService.LOG_INFO, String.format("Received event %s for object type = %s, id = %s",
+                killbillEvent.getEventType(), killbillEvent.getObjectType(), killbillEvent.getObjectId()));
+
         if (!EVENTS_TO_CONSIDER.contains(killbillEvent.getEventType())) {
             return;
         }
@@ -155,8 +158,8 @@ public class EmailNotificationListener implements OSGIKillbillEventDispatcher.OS
                     break;
             }
 
-            logService.log(LogService.LOG_INFO, String.format("Received event %s for object type = %s, id = %s",
-                    killbillEvent.getEventType(), killbillEvent.getObjectType(), killbillEvent.getObjectId()));
+//            logService.log(LogService.LOG_INFO, String.format("Received event %s for object type = %s, id = %s",
+//                    killbillEvent.getEventType(), killbillEvent.getObjectType(), killbillEvent.getObjectId()));
 
         } catch (final AccountApiException e) {
             logService.log(LogService.LOG_WARNING, String.format("Unable to find account: %s", killbillEvent.getAccountId()), e);
